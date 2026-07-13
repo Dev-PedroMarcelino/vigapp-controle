@@ -1,0 +1,19 @@
+{
+  "name": "vigapp-dev",
+  "version": "1.0.0",
+  "description": "VigApp — Sistema de gestao de clientes, leads e marketing",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "VigApp",
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^12.16.0",
+    "lucide": "^1.24.0",
+    "vite": "^8.1.4"
+  }
+}
