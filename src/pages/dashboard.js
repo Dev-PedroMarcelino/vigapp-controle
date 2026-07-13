@@ -105,10 +105,12 @@ export async function renderDashboardPage(container) {
 
 async function loadDashboardData() {
   try {
-    // Fetch all deals
-    const deals = await getDocuments('deals');
-    const leads = await getDocuments('leads');
-    const payments = await getDocuments('payments');
+    // Fetch all deals, leads, and payments in parallel for better performance
+    const [deals, leads, payments] = await Promise.all([
+      getDocuments('deals'),
+      getDocuments('leads'),
+      getDocuments('payments')
+    ]);
 
     // Calculate stats
     const closedWon = deals.filter(d => d.stage === 'closed-won');
