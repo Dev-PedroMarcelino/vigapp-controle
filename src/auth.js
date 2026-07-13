@@ -9,6 +9,11 @@ let currentUserData = null;
 let authReadyResolve;
 const authReady = new Promise(resolve => { authReadyResolve = resolve; });
 
+// Max time to wait for the Firestore user profile before booting the app
+// anyway. Keeps the app responsive when Firestore is slow or blocked by a
+// browser extension (ERR_BLOCKED_BY_CLIENT) instead of hanging on boot.
+const PROFILE_FETCH_TIMEOUT = 2500;
+
 /**
  * Initialize auth state listener.
  */
@@ -16,35 +21,42 @@ export function initAuth() {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       currentUser = user;
-      // Fetch user doc from Firestore (SDK loaded lazily on first authenticated user)
-      try {
-        const { db, doc, getDoc } = await getFirestoreSDK();
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          currentUserData = { uid: user.uid, ...userDoc.data() };
-        } else {
-          currentUserData = {
-            uid: user.uid,
-            email: user.email,
-            name: user.email.split('@')[0],
-            role: 'user',
-          };
-        }
-      } catch (e) {
-        console.warn('Failed to fetch user data:', e);
-        currentUserData = {
-          uid: user.uid,
-          email: user.email,
-          name: user.email.split('@')[0],
-          role: 'user',
-        };
-      }
+      // Set an immediate fallback profile so nothing downstream depends on
+      // Firestore being reachable.
+      currentUserData = {
+        uid: user.uid,
+        email: user.email,
+        name: user.email ? user.email.split('@')[0] : 'Usuario',
+        role: 'user',
+      };
+      // Enrich from Firestore, but never let it block boot for more than
+      // PROFILE_FETCH_TIMEOUT ms.
+      await Promise.race([
+        loadUserProfile(user),
+        new Promise(resolve => setTimeout(resolve, PROFILE_FETCH_TIMEOUT)),
+      ]);
     } else {
       currentUser = null;
       currentUserData = null;
     }
     authReadyResolve();
   });
+}
+
+/**
+ * Fetch the user's profile document from Firestore and merge it into the
+ * cached user data. Failures are swallowed — the fallback profile stays.
+ */
+async function loadUserProfile(user) {
+  try {
+    const { db, doc, getDoc } = await getFirestoreSDK();
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      currentUserData = { uid: user.uid, ...userDoc.data() };
+    }
+  } catch (e) {
+    console.warn('Failed to fetch user data:', e);
+  }
 }
 
 /**
