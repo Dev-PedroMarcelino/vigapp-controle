@@ -23,8 +23,8 @@ export function icon(name, attrs = {}) {
 
   const svgAttrs = `xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" class="${className}"`;
 
-  // iconData[1] is the array of SVG child elements
-  const paths = iconData[1].map(([tag, attributes]) => {
+  // iconData is the array of SVG child elements
+  const paths = iconData.map(([tag, attributes]) => {
     const attrStr = Object.entries(attributes)
       .map(([key, value]) => `${key}="${value}"`)
       .join(' ');

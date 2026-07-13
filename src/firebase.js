@@ -3,7 +3,7 @@
 // ============================================================
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -39,4 +39,6 @@ export {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
 };

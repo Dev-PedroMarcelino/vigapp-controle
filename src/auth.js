@@ -1,7 +1,7 @@
 // ============================================================
 // VigApp — Auth Module
 // ============================================================
-import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, db, doc, getDoc, collection, addDoc, serverTimestamp } from './firebase.js';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, db, doc, getDoc, collection, addDoc, serverTimestamp, GoogleAuthProvider, signInWithPopup } from './firebase.js';
 
 let currentUser = null;
 let currentUserData = null;
@@ -57,6 +57,32 @@ export function waitForAuth() {
  */
 export async function login(email, password) {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  return result.user;
+}
+
+/**
+ * Login with Google.
+ */
+export async function loginWithGoogle() {
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  
+  // Check if we need to create a user doc in Firestore
+  try {
+    const { setDoc } = await import('firebase/firestore');
+    const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+    if (!userDoc.exists()) {
+      await setDoc(doc(db, 'users', result.user.uid), {
+        email: result.user.email,
+        name: result.user.displayName || result.user.email.split('@')[0],
+        role: 'user',
+        createdAt: serverTimestamp(),
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to ensure user document exists for Google login:', e);
+  }
+  
   return result.user;
 }
 
