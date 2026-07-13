@@ -66,8 +66,18 @@ export function openModal({ title, content, size = 'md', actions = [], onClose }
   overlay.appendChild(modal);
   root.appendChild(overlay);
 
+  // ESC key
+  function onKeyDown(e) {
+    if (e.key === 'Escape') close();
+  }
+
   // Close handlers
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
+    // Always detach the document-level listener so it doesn't leak
+    document.removeEventListener('keydown', onKeyDown);
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.15s';
     setTimeout(() => {
@@ -82,13 +92,6 @@ export function openModal({ title, content, size = 'md', actions = [], onClose }
     if (e.target === overlay) close();
   });
 
-  // ESC key
-  function onKeyDown(e) {
-    if (e.key === 'Escape') {
-      close();
-      document.removeEventListener('keydown', onKeyDown);
-    }
-  }
   document.addEventListener('keydown', onKeyDown);
 
   // Focus trap — focus first input

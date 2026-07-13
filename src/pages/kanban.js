@@ -168,7 +168,6 @@ async function onDrop(e) {
     await updateDocument('deals', dealId, { stage: newStage });
     deal.stage = newStage;
     renderKanban();
-    setupDragAndDrop();
 
     if (newStage === 'closed-won') {
       showToast(`Negocio "${deal.companyName}" fechado com sucesso!`, 'success');
@@ -179,7 +178,6 @@ async function onDrop(e) {
     showToast('Erro ao mover negocio', 'error');
     deal.stage = oldStage;
     renderKanban();
-    setupDragAndDrop();
   }
 }
 
@@ -275,7 +273,6 @@ function openDealModal(deal = null) {
             }
             close();
             await loadDeals();
-            setupDragAndDrop();
           } catch (err) {
             showToast('Erro ao salvar negocio', 'error');
           }

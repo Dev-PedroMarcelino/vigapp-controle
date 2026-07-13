@@ -5,6 +5,9 @@
 const routes = {};
 let currentRoute = null;
 let currentCleanup = null;
+// Incremented on every navigation so a slow-loading page chunk that resolves
+// after a newer navigation can detect it's stale and bail out.
+let navSeq = 0;
 
 /**
  * Register a route.
@@ -28,19 +31,27 @@ export async function navigate(path) {
   }
 
   currentRoute = path;
+  const navId = ++navSeq;
   window.history.pushState({}, '', path);
 
   const container = document.getElementById('page-container');
   if (!container) return;
 
-  // Clear content
-  container.innerHTML = '';
+  // Show a loading indicator while the page chunk is fetched
+  container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;flex:1;padding:60px;"><span class="spinner"></span></div>`;
 
   const handler = routes[path];
   if (handler) {
     try {
-      currentCleanup = await handler(container);
+      const cleanup = await handler(container);
+      // A newer navigation started while this chunk was loading — discard.
+      if (navId !== navSeq) {
+        if (typeof cleanup === 'function') cleanup();
+        return;
+      }
+      currentCleanup = cleanup;
     } catch (err) {
+      if (navId !== navSeq) return;
       console.error(`Error loading route "${path}":`, err);
       container.innerHTML = `
         <div class="empty-state">

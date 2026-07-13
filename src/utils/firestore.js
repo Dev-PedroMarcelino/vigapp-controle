@@ -1,13 +1,14 @@
 // ============================================================
 // VigApp — Firestore CRUD Helpers
 // ============================================================
-import { db, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy, limit, serverTimestamp } from '../firebase.js';
+import { getFirestoreSDK } from '../firestore-sdk.js';
 import { getUserData } from '../auth.js';
 
 /**
  * Add a document to a collection with audit fields.
  */
 export async function createDocument(collectionName, data) {
+  const { db, collection, addDoc, serverTimestamp } = await getFirestoreSDK();
   const user = getUserData();
   const docData = {
     ...data,
@@ -25,6 +26,7 @@ export async function createDocument(collectionName, data) {
  * Update a document with audit fields.
  */
 export async function updateDocument(collectionName, docId, data) {
+  const { db, doc, updateDoc, serverTimestamp } = await getFirestoreSDK();
   const user = getUserData();
   const docData = {
     ...data,
@@ -40,6 +42,7 @@ export async function updateDocument(collectionName, docId, data) {
  * Delete a document.
  */
 export async function deleteDocument(collectionName, docId) {
+  const { db, doc, deleteDoc } = await getFirestoreSDK();
   await deleteDoc(doc(db, collectionName, docId));
 }
 
@@ -47,6 +50,7 @@ export async function deleteDocument(collectionName, docId) {
  * Get all documents from a collection with optional filters.
  */
 export async function getDocuments(collectionName, filters = [], sortBy = null, limitCount = null) {
+  const { db, collection, query, where, orderBy, limit, getDocs } = await getFirestoreSDK();
   let q = collection(db, collectionName);
 
   const constraints = [];
@@ -74,6 +78,7 @@ export async function getDocuments(collectionName, filters = [], sortBy = null, 
  * Get a single document by ID.
  */
 export async function getDocument(collectionName, docId) {
+  const { db, doc, getDoc } = await getFirestoreSDK();
   const docSnap = await getDoc(doc(db, collectionName, docId));
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() };

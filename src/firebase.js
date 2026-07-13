@@ -1,8 +1,10 @@
 // ============================================================
-// VigApp — Firebase Configuration
+// VigApp — Firebase Configuration (App + Auth only)
 // ============================================================
+// Firestore is intentionally NOT imported here. It is loaded lazily via
+// firestore-sdk.js so the Firestore SDK stays out of the initial (login)
+// bundle and is only fetched once the user is authenticated.
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -15,26 +17,11 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 const auth = getAuth(app);
 
 export {
-  db,
+  app,
   auth,
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  getDocs,
-  getDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  Timestamp,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,

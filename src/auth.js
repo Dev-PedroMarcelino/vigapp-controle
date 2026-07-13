@@ -1,7 +1,8 @@
 // ============================================================
 // VigApp — Auth Module
 // ============================================================
-import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, db, doc, getDoc, collection, addDoc, serverTimestamp, GoogleAuthProvider, signInWithPopup } from './firebase.js';
+import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from './firebase.js';
+import { getFirestoreSDK } from './firestore-sdk.js';
 
 let currentUser = null;
 let currentUserData = null;
@@ -15,8 +16,9 @@ export function initAuth() {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       currentUser = user;
-      // Fetch user doc from Firestore
+      // Fetch user doc from Firestore (SDK loaded lazily on first authenticated user)
       try {
+        const { db, doc, getDoc } = await getFirestoreSDK();
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           currentUserData = { uid: user.uid, ...userDoc.data() };
@@ -66,10 +68,10 @@ export async function login(email, password) {
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   const result = await signInWithPopup(auth, provider);
-  
+
   // Check if we need to create a user doc in Firestore
   try {
-    const { setDoc } = await import('firebase/firestore');
+    const { db, doc, getDoc, setDoc, serverTimestamp } = await getFirestoreSDK();
     const userDoc = await getDoc(doc(db, 'users', result.user.uid));
     if (!userDoc.exists()) {
       await setDoc(doc(db, 'users', result.user.uid), {
@@ -92,7 +94,7 @@ export async function loginWithGoogle() {
 export async function register(email, password, name) {
   const result = await createUserWithEmailAndPassword(auth, email, password);
   // Create user document in Firestore
-  const { setDoc } = await import('firebase/firestore');
+  const { db, doc, setDoc, serverTimestamp } = await getFirestoreSDK();
   await setDoc(doc(db, 'users', result.user.uid), {
     email,
     name,
