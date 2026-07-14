@@ -114,6 +114,7 @@ const routeTitles = {
   '/calendar': 'Calendario',
   '/marketing': 'Marketing',
   '/users': 'Usuarios',
+  '/access': 'Controle de Acesso',
 };
 
 function updateHeaderTitle(path) {

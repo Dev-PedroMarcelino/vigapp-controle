@@ -60,6 +60,8 @@ export const ICONS = {
   marketing: 'Megaphone',
   users: 'UserCog',
   settings: 'Settings',
+  lock: 'Lock',
+  shield: 'ShieldCheck',
 
   // Actions
   add: 'Plus',

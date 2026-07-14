@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// VigApp Firestore security rules.
+//
+// Real, server-side access control: only admins or e-mails registered in the
+// `allowed_emails` collection (via the in-app "Controle de Acesso" page) can
+// read/write the business data. Deploy in Firebase Console → Firestore →
+// Rules, or with `firebase deploy --only firestore:rules`.
+//
+// One-time bootstrap BEFORE deploying these rules (otherwise you lock yourself
+// out): in Firestore, open your document in the `users` collection and set
+// `role` to `"admin"`. Admins always have access, so you can then add the rest
+// of the team's e-mails from inside the app.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function userEmail() { return request.auth.token.email; }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // The allowlist doc id is the lowercased e-mail (see src/pages/access.js).
+    function isAllowlisted() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/allowed_emails/$(userEmail()));
+    }
+
+    function hasAccess() { return isAdmin() || isAllowlisted(); }
+
+    // User profiles: a user manages their own doc (needed at login);
+    // admins can read everyone and manage roles.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if request.auth.uid == uid || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Access allowlist: any signed-in user can READ it (the login gate needs
+    // to check membership); only admins can change it.
+    match /allowed_emails/{emailId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // All business data: only users with access.
+    match /{col}/{docId} {
+      allow read, write: if hasAccess() && !(col in ['users', 'allowed_emails']);
+    }
+  }
+}

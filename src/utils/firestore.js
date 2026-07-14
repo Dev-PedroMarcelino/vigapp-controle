@@ -23,6 +23,23 @@ export async function createDocument(collectionName, data) {
 }
 
 /**
+ * Create or overwrite a document at a specific ID (merged with audit fields).
+ * Used when the ID must be meaningful (e.g. an email in the access allowlist).
+ */
+export async function setDocument(collectionName, docId, data) {
+  const { db, doc, setDoc, serverTimestamp } = await getFirestoreSDK();
+  const user = getUserData();
+  const docData = {
+    ...data,
+    createdBy: user ? { uid: user.uid, name: user.name, email: user.email } : null,
+    createdAt: serverTimestamp(),
+  };
+
+  await setDoc(doc(db, collectionName, docId), docData, { merge: true });
+  return { id: docId, ...docData };
+}
+
+/**
  * Update a document with audit fields.
  */
 export async function updateDocument(collectionName, docId, data) {
