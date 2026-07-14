@@ -18,7 +18,9 @@ There is no lint, format, or test tooling configured.
 
 ## Environment setup
 
-Firebase and Google Maps keys are read from Vite env vars. Copy `.env.example` to `.env` and fill in the values (all prefixed `VITE_`, so they are exposed to the client bundle). Without a valid Firebase config the app will fail at auth. `src/firebase.js` is the single place that reads `import.meta.env`.
+Firebase keys are read from Vite env vars. Copy `.env.example` to `.env` and fill in the values (all prefixed `VITE_`, so they are exposed to the client bundle). Without a valid Firebase config the app will fail at auth. `src/firebase.js` is the single place that reads `import.meta.env`.
+
+The **leads capture page** (`src/pages/leads.js`) uses a free, key-less OpenStreetMap stack — **Leaflet** + OSM tiles for the map, **Nominatim** to geocode a city to an area, and the **Overpass API** to find businesses of a niche. No API key or credit card is needed; there are no env vars for it. OSM has no ratings/reviews, so "potential lead" is driven by the absence of a `website` tag. Leaflet is loaded on demand from a CDN (unpkg).
 
 ## Architecture
 
