@@ -21,7 +21,8 @@ const navItems = [
   { route: '/marketing', label: 'Marketing', icon: ICONS.marketing },
   { section: 'Admin', adminOnly: true },
   { route: '/users', label: 'Usuarios', icon: ICONS.users, adminOnly: true },
-  { route: '/access', label: 'Controle de Acesso', icon: ICONS.lock, adminOnly: true },
+  { section: 'Sistema' },
+  { route: '/access', label: 'Controle de Acesso', icon: ICONS.lock },
 ];
 
 /**
