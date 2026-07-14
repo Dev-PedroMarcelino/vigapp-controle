@@ -26,29 +26,31 @@ const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 const NOMINATIM = '/api/nominatim';
 const OVERPASS = '/api/overpass';
 
-// pt-BR niche keywords -> OSM tag filter (Overpass syntax).
+// pt-BR niche keywords -> one or more OSM tag filters (Overpass syntax).
+// Multiple filters per niche broaden coverage (e.g. a "mercado" is tagged as
+// supermarket, convenience OR grocery in OSM).
 const NICHE_TAGS = [
-  { kw: ['restaurante', 'restaurantes'], f: '["amenity"="restaurant"]' },
-  { kw: ['lanchonete', 'lanchonetes', 'fast food', 'hamburgueria'], f: '["amenity"="fast_food"]' },
-  { kw: ['bar', 'bares', 'pub'], f: '["amenity"="bar"]' },
-  { kw: ['cafe', 'café', 'cafeteria'], f: '["amenity"="cafe"]' },
-  { kw: ['padaria', 'padarias'], f: '["shop"="bakery"]' },
-  { kw: ['academia', 'academias', 'fitness'], f: '["leisure"="fitness_centre"]' },
-  { kw: ['clinica', 'clínica', 'clinicas'], f: '["amenity"="clinic"]' },
-  { kw: ['dentista', 'dentistas', 'odonto', 'odontologia'], f: '["amenity"="dentist"]' },
-  { kw: ['farmacia', 'farmácia', 'drogaria'], f: '["amenity"="pharmacy"]' },
-  { kw: ['hotel', 'hoteis', 'hotéis', 'pousada'], f: '["tourism"="hotel"]' },
-  { kw: ['salao', 'salão', 'cabeleireiro', 'beleza'], f: '["shop"="hairdresser"]' },
-  { kw: ['barbearia', 'barbearias', 'barbeiro'], f: '["shop"="hairdresser"]' },
-  { kw: ['petshop', 'pet shop', 'pet'], f: '["shop"="pet"]' },
-  { kw: ['mercado', 'supermercado', 'mercearia'], f: '["shop"="supermarket"]' },
-  { kw: ['roupa', 'roupas', 'moda', 'boutique'], f: '["shop"="clothes"]' },
-  { kw: ['oficina', 'mecanica', 'mecânica'], f: '["shop"="car_repair"]' },
-  { kw: ['escola', 'escolas', 'colegio', 'colégio'], f: '["amenity"="school"]' },
-  { kw: ['advogado', 'advocacia', 'juridico', 'jurídico'], f: '["office"="lawyer"]' },
-  { kw: ['imobiliaria', 'imobiliária', 'imoveis', 'imóveis'], f: '["office"="estate_agent"]' },
-  { kw: ['hospital', 'hospitais'], f: '["amenity"="hospital"]' },
-  { kw: ['loja', 'lojas', 'comercio', 'comércio'], f: '["shop"]' },
+  { kw: ['restaurante', 'restaurantes'], f: ['["amenity"="restaurant"]'] },
+  { kw: ['lanchonete', 'lanchonetes', 'fast food', 'hamburgueria', 'hamburgueria'], f: ['["amenity"="fast_food"]'] },
+  { kw: ['bar', 'bares', 'pub'], f: ['["amenity"="bar"]', '["amenity"="pub"]'] },
+  { kw: ['cafe', 'café', 'cafeteria'], f: ['["amenity"="cafe"]'] },
+  { kw: ['padaria', 'padarias', 'confeitaria'], f: ['["shop"="bakery"]', '["shop"="pastry"]'] },
+  { kw: ['academia', 'academias', 'fitness'], f: ['["leisure"="fitness_centre"]', '["leisure"="sports_centre"]'] },
+  { kw: ['clinica', 'clínica', 'clinicas'], f: ['["amenity"="clinic"]', '["healthcare"="clinic"]', '["amenity"="doctors"]'] },
+  { kw: ['dentista', 'dentistas', 'odonto', 'odontologia'], f: ['["amenity"="dentist"]', '["healthcare"="dentist"]'] },
+  { kw: ['farmacia', 'farmácia', 'drogaria'], f: ['["amenity"="pharmacy"]'] },
+  { kw: ['hotel', 'hoteis', 'hotéis', 'pousada'], f: ['["tourism"="hotel"]', '["tourism"="guest_house"]', '["tourism"="motel"]'] },
+  { kw: ['salao', 'salão', 'cabeleireiro', 'beleza', 'estetica', 'estética'], f: ['["shop"="hairdresser"]', '["shop"="beauty"]'] },
+  { kw: ['barbearia', 'barbearias', 'barbeiro'], f: ['["shop"="hairdresser"]'] },
+  { kw: ['petshop', 'pet shop', 'pet', 'veterinaria', 'veterinária'], f: ['["shop"="pet"]', '["amenity"="veterinary"]'] },
+  { kw: ['mercado', 'supermercado', 'mercearia'], f: ['["shop"="supermarket"]', '["shop"="convenience"]', '["shop"="grocery"]'] },
+  { kw: ['roupa', 'roupas', 'moda', 'boutique', 'loja de roupas'], f: ['["shop"="clothes"]'] },
+  { kw: ['oficina', 'mecanica', 'mecânica'], f: ['["shop"="car_repair"]'] },
+  { kw: ['escola', 'escolas', 'colegio', 'colégio'], f: ['["amenity"="school"]'] },
+  { kw: ['advogado', 'advocacia', 'juridico', 'jurídico'], f: ['["office"="lawyer"]'] },
+  { kw: ['imobiliaria', 'imobiliária', 'imoveis', 'imóveis'], f: ['["office"="estate_agent"]'] },
+  { kw: ['hospital', 'hospitais'], f: ['["amenity"="hospital"]'] },
+  { kw: ['loja', 'lojas', 'comercio', 'comércio'], f: ['["shop"]'] },
 ];
 
 export async function renderLeadsPage(container) {
@@ -220,19 +222,32 @@ function nicheFilter(query) {
   return null; // fall back to a name-based search
 }
 
-function buildOverpassQuery(filter, bbox, query) {
+function buildOverpassQuery(filters, bbox, query) {
   // Nominatim boundingbox = [south, north, west, east]; Overpass wants (s,w,n,e).
   const [s, n, w, e] = bbox.map(Number);
   const box = `${s},${w},${n},${e}`;
 
-  if (filter) {
-    return `[out:json][timeout:25];(nwr${filter}(${box}););out center 80;`;
+  let body;
+  if (filters && filters.length) {
+    body = filters.map(f => `nwr${f}(${box});`).join('');
+  } else {
+    // Name-based fallback, restricted to business-like elements to stay fast.
+    const q = query.replace(/["\\]/g, '');
+    const cats = ['shop', 'amenity', 'office', 'craft', 'leisure', 'tourism'];
+    body = cats.map(c => `nwr["name"~"${q}",i]["${c}"](${box});`).join('');
   }
-  // Name-based fallback, restricted to business-like elements to stay fast.
-  const q = query.replace(/["\\]/g, '');
-  const cats = ['shop', 'amenity', 'office', 'craft', 'leisure', 'tourism'];
-  const parts = cats.map(c => `nwr["name"~"${q}",i]["${c}"](${box});`).join('');
-  return `[out:json][timeout:25];(${parts});out center 80;`;
+  return `[out:json][timeout:25];(${body});out center 200;`;
+}
+
+// fetch that always settles: aborts after `ms` so the UI never hangs forever.
+async function fetchWithTimeout(url, options = {}, ms = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function searchLeads() {
@@ -248,9 +263,9 @@ async function searchLeads() {
 
   try {
     // 1) Geocode the city/region with Nominatim.
-    const geoRes = await fetch(`${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(location)}`, {
+    const geoRes = await fetchWithTimeout(`${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(location)}`, {
       headers: { 'Accept': 'application/json' },
-    });
+    }, 15000);
     const geo = await geoRes.json();
     if (!geo.length) {
       showToast('Localizacao nao encontrada. Tente outra cidade.', 'warning');
@@ -267,11 +282,11 @@ async function searchLeads() {
 
     // 2) Query businesses with Overpass.
     const overpassQuery = buildOverpassQuery(nicheFilter(query), boundingbox, query);
-    const res = await fetch(OVERPASS, {
+    const res = await fetchWithTimeout(OVERPASS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(overpassQuery),
-    });
+    }, 30000);
     if (!res.ok) throw new Error(`Overpass ${res.status}`);
     const data = await res.json();
 

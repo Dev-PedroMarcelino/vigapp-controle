@@ -3,13 +3,18 @@
 // not reliably send CORS headers). Runs server-side, where CORS does not apply.
 //
 // A descriptive User-Agent is required: without it, Overpass's anti-bot layer
-// returns 406 to datacenter IPs (like Vercel's). Several mirrors are tried in
-// order so a single instance blocking/rate-limiting the IP is not fatal.
+// returns 406 to datacenter IPs (like Vercel's). All mirrors are queried in
+// parallel and the first successful JSON response wins, so a slow or
+// blocking instance can't stall the request (and it stays within Vercel's
+// function time limit).
+export const config = { maxDuration: 30 };
+
 const ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
+const PER_REQUEST_TIMEOUT = 25000;
 
 export default async function handler(req, res) {
   const query =
@@ -24,29 +29,33 @@ export default async function handler(req, res) {
     return;
   }
 
-  let last = null;
-  for (const url of ENDPOINTS) {
-    try {
-      const upstream = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'VigApp/1.0 (CRM lead capture)',
-          'Accept': 'application/json',
-        },
-        body: 'data=' + encodeURIComponent(query),
-      });
-      if (upstream.ok) {
-        const text = await upstream.text();
-        res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json');
-        res.status(200).send(text);
-        return;
-      }
-      last = { url, status: upstream.status };
-    } catch (err) {
-      last = { url, error: String(err) };
-    }
-  }
+  const body = 'data=' + encodeURIComponent(query);
+  const attempt = (url) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PER_REQUEST_TIMEOUT);
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'VigApp/1.0 (CRM lead capture)',
+        'Accept': 'application/json',
+      },
+      body,
+      signal: controller.signal,
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+        return { text: await r.text(), ct: r.headers.get('content-type') };
+      })
+      .finally(() => clearTimeout(timer));
+  };
 
-  res.status(502).json({ error: 'all Overpass endpoints failed', last });
+  try {
+    // First endpoint to return a successful response wins.
+    const result = await Promise.any(ENDPOINTS.map(attempt));
+    res.setHeader('Content-Type', result.ct || 'application/json');
+    res.status(200).send(result.text);
+  } catch (err) {
+    res.status(502).json({ error: 'all Overpass endpoints failed' });
+  }
 }
