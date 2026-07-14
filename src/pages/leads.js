@@ -21,8 +21,10 @@ let selectedIds = new Set();
 
 const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
 const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+// Same-origin proxies (Vercel serverless in prod, Vite proxy in dev) so the
+// browser never hits the OSM services cross-origin (they omit CORS headers).
+const NOMINATIM = '/api/nominatim';
+const OVERPASS = '/api/overpass';
 
 // pt-BR niche keywords -> OSM tag filter (Overpass syntax).
 const NICHE_TAGS = [
@@ -267,6 +269,7 @@ async function searchLeads() {
     const overpassQuery = buildOverpassQuery(nicheFilter(query), boundingbox, query);
     const res = await fetch(OVERPASS, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(overpassQuery),
     });
     if (!res.ok) throw new Error(`Overpass ${res.status}`);
