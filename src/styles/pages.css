@@ -330,8 +330,12 @@
   border-radius: 10px;
   padding: 14px;
   cursor: grab;
-  transition: all 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s;
   user-select: none;
+  -webkit-user-select: none;
+  /* Allow the board to be scrolled by touch; a long-press starts the drag. */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
 }
 
 .kanban-card:hover {
@@ -341,12 +345,23 @@
 
 .kanban-card:active {
   cursor: grabbing;
-  opacity: 0.8;
 }
 
+/* The original card while its clone is being dragged. */
 .kanban-card.dragging {
-  opacity: 0.5;
+  opacity: 0.4;
+}
+
+/* Floating copy that follows the pointer/finger during a drag. */
+.kanban-card-clone {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.95;
+  box-shadow: var(--shadow-lg);
   transform: rotate(2deg);
+  cursor: grabbing;
 }
 
 .kanban-card-title {
@@ -525,13 +540,22 @@
     grid-template-columns: 1fr;
   }
 
+  /* Stack the columns vertically so the whole board fits the screen width
+     (no sideways scrolling) — you scroll down through the stages instead. */
   .kanban-container {
+    flex-direction: column;
+    overflow-x: hidden;
     height: auto;
-    min-height: 500px;
+    gap: 14px;
   }
 
   .kanban-column {
-    min-width: 280px;
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  .kanban-column-body {
+    min-height: 56px;
   }
 
   .calendar-day {

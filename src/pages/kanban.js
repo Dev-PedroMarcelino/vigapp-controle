@@ -19,7 +19,13 @@ const STAGES = [
 let deals = [];
 let companiesList = [];
 let servicesList = [];
-let draggedCard = null;
+
+// Pointer-based drag & drop state (works with both touch and mouse).
+let drag = null;
+const HOLD_MS = 160;        // long-press before a touch drag starts
+const MOVE_THRESHOLD = 8;   // px of movement that counts as drag/scroll intent
+const EDGE = 72;            // px from a viewport edge that triggers auto-scroll
+const SCROLL_SPEED = 14;
 
 export async function renderKanbanPage(container) {
   container.innerHTML = `
@@ -55,9 +61,6 @@ export async function renderKanbanPage(container) {
 
   document.getElementById('btn-add-deal')?.addEventListener('click', () => openDealModal());
 
-  // Setup drag and drop
-  setupDragAndDrop();
-
   await loadDeals();
 }
 
@@ -89,7 +92,7 @@ function renderKanban() {
     }
 
     body.innerHTML = stageDeals.map(d => `
-      <div class="kanban-card" draggable="true" data-deal-id="${d.id}">
+      <div class="kanban-card" data-deal-id="${d.id}">
         <div class="kanban-card-title">${d.companyName || 'Sem empresa'}</div>
         <div class="kanban-card-service">${d.serviceName || 'Sem servico'}</div>
         <div class="kanban-card-footer">
@@ -99,71 +102,177 @@ function renderKanban() {
       </div>
     `).join('');
 
-    // Make cards draggable
+    // Pointer-based drag (touch + mouse). A plain tap/click opens the deal.
     body.querySelectorAll('.kanban-card').forEach(card => {
-      card.addEventListener('dragstart', onDragStart);
-      card.addEventListener('dragend', onDragEnd);
-      card.addEventListener('click', () => {
-        const deal = deals.find(d => d.id === card.dataset.dealId);
-        if (deal) openDealModal(deal);
-      });
+      card.addEventListener('pointerdown', onCardPointerDown);
     });
   });
 }
 
-function setupDragAndDrop() {
-  const columns = document.querySelectorAll('.kanban-column-body');
-  columns.forEach(col => {
-    col.addEventListener('dragover', onDragOver);
-    col.addEventListener('dragenter', onDragEnter);
-    col.addEventListener('dragleave', onDragLeave);
-    col.addEventListener('drop', onDrop);
-  });
+// ============================================================
+// Drag & drop via Pointer Events — works on touch and mouse.
+// On touch, a short long-press picks up the card (so the board can still be
+// scrolled normally); on mouse, movement past a threshold starts the drag.
+// A floating clone follows the pointer and the column under it is highlighted.
+// ============================================================
+function onCardPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const card = e.currentTarget;
+
+  drag = {
+    dealId: card.dataset.dealId,
+    card,
+    pointerId: e.pointerId,
+    isTouch: e.pointerType === 'touch',
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    offsetX: 0,
+    offsetY: 0,
+    active: false,
+    moved: false,
+    targetStage: null,
+    clone: null,
+    holdTimer: null,
+    rafId: null,
+  };
+
+  // Touch: wait for a brief hold before grabbing, so scrolling still works.
+  if (drag.isTouch) {
+    drag.holdTimer = setTimeout(() => startDrag(), HOLD_MS);
+  }
+
+  document.addEventListener('pointermove', onPointerMove, { passive: false });
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerUp);
+  // Non-passive so we can stop the page from scrolling while dragging on touch.
+  document.addEventListener('touchmove', onTouchMoveGuard, { passive: false });
 }
 
-function onDragStart(e) {
-  draggedCard = e.target;
-  e.target.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', e.target.dataset.dealId);
-}
+function onPointerMove(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  drag.lastX = e.clientX;
+  drag.lastY = e.clientY;
 
-function onDragEnd(e) {
-  e.target.classList.remove('dragging');
-  draggedCard = null;
-  document.querySelectorAll('.kanban-column-body').forEach(col => {
-    col.classList.remove('drag-over');
-  });
-}
+  if (!drag.active) {
+    const dist = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+    if (drag.isTouch) {
+      // Moved before the hold completed → treat as a scroll, abort the drag.
+      if (dist > MOVE_THRESHOLD) cleanupDrag();
+    } else if (dist > MOVE_THRESHOLD) {
+      startDrag();
+    }
+    return;
+  }
 
-function onDragOver(e) {
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
+  drag.moved = true;
+  positionClone(e.clientX, e.clientY);
+  updateTargetColumn(e.clientX, e.clientY);
 }
 
-function onDragEnter(e) {
-  e.preventDefault();
-  e.currentTarget.classList.add('drag-over');
+function startDrag() {
+  if (!drag || drag.active) return;
+  clearTimeout(drag.holdTimer);
+  drag.active = true;
+
+  const card = drag.card;
+  const rect = card.getBoundingClientRect();
+  drag.offsetX = drag.lastX - rect.left;
+  drag.offsetY = drag.lastY - rect.top;
+
+  const clone = card.cloneNode(true);
+  clone.classList.add('kanban-card-clone');
+  clone.style.width = rect.width + 'px';
+  document.body.appendChild(clone);
+  drag.clone = clone;
+  positionClone(drag.lastX, drag.lastY);
+
+  card.classList.add('dragging');
+  if (navigator.vibrate) navigator.vibrate(15);
+
+  startAutoScroll();
 }
 
-function onDragLeave(e) {
-  e.currentTarget.classList.remove('drag-over');
+function positionClone(x, y) {
+  if (!drag || !drag.clone) return;
+  drag.clone.style.left = (x - drag.offsetX) + 'px';
+  drag.clone.style.top = (y - drag.offsetY) + 'px';
 }
 
-async function onDrop(e) {
-  e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
+function updateTargetColumn(x, y) {
+  // The clone has pointer-events:none, so elementFromPoint sees what's under it.
+  const col = document.elementFromPoint(x, y)?.closest('.kanban-column');
+  document.querySelectorAll('.kanban-column-body.drag-over')
+    .forEach(c => c.classList.remove('drag-over'));
+  drag.targetStage = null;
+  if (col) {
+    const body = col.querySelector('.kanban-column-body');
+    if (body) {
+      body.classList.add('drag-over');
+      drag.targetStage = col.dataset.stage;
+    }
+  }
+}
 
-  const dealId = e.dataTransfer.getData('text/plain');
-  const newStage = e.currentTarget.dataset.stage;
+function startAutoScroll() {
+  const pageEl = document.querySelector('.page-content');
+  const boardEl = document.getElementById('kanban-container');
+  function tick() {
+    if (!drag || !drag.active) return;
+    const { lastX: x, lastY: y } = drag;
+    if (pageEl) {
+      if (y < EDGE) pageEl.scrollTop -= SCROLL_SPEED;
+      else if (y > window.innerHeight - EDGE) pageEl.scrollTop += SCROLL_SPEED;
+    }
+    if (boardEl) {
+      if (x < EDGE) boardEl.scrollLeft -= SCROLL_SPEED;
+      else if (x > window.innerWidth - EDGE) boardEl.scrollLeft += SCROLL_SPEED;
+    }
+    drag.rafId = requestAnimationFrame(tick);
+  }
+  drag.rafId = requestAnimationFrame(tick);
+}
 
-  if (!dealId || !newStage) return;
+function onTouchMoveGuard(e) {
+  if (drag && drag.active) e.preventDefault();
+}
 
+function onPointerUp() {
+  if (!drag) return;
+  const { active, moved, targetStage, dealId } = drag;
+  cleanupDrag();
+
+  if (!active) {
+    // A tap/click with no drag → open the deal.
+    const deal = deals.find(d => d.id === dealId);
+    if (deal) openDealModal(deal);
+    return;
+  }
+  if (moved && targetStage) moveDeal(dealId, targetStage);
+}
+
+function cleanupDrag() {
+  if (!drag) return;
+  clearTimeout(drag.holdTimer);
+  if (drag.rafId) cancelAnimationFrame(drag.rafId);
+  if (drag.clone) drag.clone.remove();
+  drag.card?.classList.remove('dragging');
+  document.querySelectorAll('.kanban-column-body.drag-over')
+    .forEach(c => c.classList.remove('drag-over'));
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('pointercancel', onPointerUp);
+  document.removeEventListener('touchmove', onTouchMoveGuard);
+  drag = null;
+}
+
+async function moveDeal(dealId, newStage) {
   const deal = deals.find(d => d.id === dealId);
   if (!deal || deal.stage === newStage) return;
 
   const oldStage = deal.stage;
-
   try {
     await updateDocument('deals', dealId, { stage: newStage });
     deal.stage = newStage;
