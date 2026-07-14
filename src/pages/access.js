@@ -143,7 +143,12 @@ async function addEmail() {
     if (input) input.value = '';
     await loadEmails();
   } catch (err) {
-    showToast('Erro ao autorizar e-mail', 'error');
+    console.error('Erro ao autorizar e-mail:', err);
+    if (err?.code === 'permission-denied') {
+      showToast('Sem permissao no Firestore. Ajuste as regras (veja firestore.rules).', 'error');
+    } else {
+      showToast('Erro ao autorizar: ' + (err?.message || err), 'error');
+    }
   }
 }
 
