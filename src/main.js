@@ -12,6 +12,7 @@ import { applySavedTheme } from './components/header.js';
 import { renderSidebar, initSidebar } from './components/sidebar.js';
 import { renderHeader, initHeader } from './components/header.js';
 import { registerRoute, initRouter } from './router.js';
+import { initPWA } from './pwa.js';
 
 // Lazily load a page module only when its route is first visited.
 // Each import() becomes its own chunk, so pages are no longer in the initial bundle.
@@ -59,6 +60,7 @@ function renderApp() {
   // Initialize interactive components
   initSidebar();
   initHeader();
+  initPWA();
 
   // Register all routes — page modules are code-split and loaded on first visit
   registerRoute('/dashboard', lazyPage(() => import('./pages/dashboard.js'), 'renderDashboardPage'));

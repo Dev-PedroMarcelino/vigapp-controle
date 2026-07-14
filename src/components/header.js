@@ -21,6 +21,9 @@ export function renderHeader() {
         </div>
       </div>
       <div class="header-right">
+        <button class="btn-icon" id="btn-install-app" data-tooltip="Instalar app" style="display: none;">
+          ${icon(ICONS.download, { size: 18 })}
+        </button>
         <button class="btn-icon" id="btn-theme-toggle" data-tooltip="Alternar tema">
           ${icon(themeIcon, { size: 18 })}
         </button>
